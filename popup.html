@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Focus Reader</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 260px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      font-size: 13px;
+      color: #1c1c1e;
+      background: #f2f2f7;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body { background: #1c1c1e; color: #f2f2f7; }
+      .card { background: #2c2c2e; }
+      .section-title { color: #98989d; }
+      .toggle-track { background: #3a3a3c; }
+      .option-btn { background: #3a3a3c; color: #f2f2f7; }
+      .option-btn:hover { background: #48484a; }
+      .option-btn.active { background: #0a84ff; color: #fff; }
+      .badge { background: #3a3a3c; color: #98989d; }
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    .subtitle {
+      font-size: 11px;
+      color: #8e8e93;
+      margin-top: 1px;
+    }
+
+    /* 主开关 */
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toggle-track {
+      position: relative;
+      width: 44px;
+      height: 26px;
+      background: #e5e5ea;
+      border-radius: 13px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .toggle-track.on {
+      background: #34c759;
+    }
+
+    .toggle-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+      transition: transform 0.2s ease;
+    }
+
+    .toggle-track.on .toggle-thumb {
+      transform: translateX(18px);
+    }
+
+    /* 卡片 */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      margin: 0 10px 10px;
+      overflow: hidden;
+    }
+
+    .card-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+    }
+
+    .card-row + .card-row {
+      border-top: 0.5px solid #e5e5ea;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .card-row + .card-row { border-top-color: #3a3a3c; }
+    }
+
+    .row-label {
+      font-size: 13px;
+      color: inherit;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6c6c70;
+      padding: 6px 16px 4px;
+    }
+
+    /* 选项按钮组 */
+    .option-group {
+      display: flex;
+      gap: 5px;
+    }
+
+    .option-btn {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: none;
+      background: #e5e5ea;
+      color: #1c1c1e;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      font-family: inherit;
+    }
+
+    .option-btn:hover {
+      background: #d1d1d6;
+    }
+
+    .option-btn.active {
+      background: #007aff;
+      color: #fff;
+    }
+
+    /* 颜色选择器 */
+    .color-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .color-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2.5px solid transparent;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+
+    .color-dot:hover {
+      transform: scale(1.1);
+    }
+
+    .color-dot.active {
+      border-color: #007aff;
+    }
+
+    .color-dot[data-color="yellow"]  { background: #ffd600; }
+    .color-dot[data-color="green"]   { background: #4cd964; }
+    .color-dot[data-color="blue"]    { background: #5ac8fa; }
+    .color-dot[data-color="pink"]    { background: #ff6b9d; }
+
+    /* 兼容提示 */
+    .badge {
+      font-size: 10px;
+      background: #e5e5ea;
+      color: #6c6c70;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .footer {
+      padding: 6px 16px 12px;
+      font-size: 11px;
+      color: #8e8e93;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <div class="title">🔍 Focus Reader</div>
+      <div class="subtitle">阅读辅助高亮</div>
+    </div>
+    <div class="toggle-wrap">
+      <div class="toggle-track" id="mainToggle">
+        <div class="toggle-thumb"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="settingsPanel">
+
+    <div class="section-title">高亮模式</div>
+    <div class="card">
+      <div class="card-row">
+        <span class="row-label">显示方式</span>
+        <div class="option-group">
+          <button class="option-btn" data-mode="guide">导引条</button>
+          <button class="option-btn" data-mode="text">文字</button>
+          <button class="option-btn" data-mode="both">两者</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">颜色</div>
+    <div class="card">
+      <div class="card-row">
+        <span class="row-label">高亮颜色</span>
+        <div class="color-group">
+          <div class="color-dot" data-color="yellow" title="黄色"></div>
+          <div class="color-dot" data-color="green"  title="绿色"></div>
+          <div class="color-dot" data-color="blue"   title="蓝色"></div>
+          <div class="color-dot" data-color="pink"   title="粉色"></div>
+        </div>
+      </div>
+      <div class="card-row">
+        <span class="row-label">强度</span>
+        <div class="option-group">
+          <button class="option-btn" data-opacity="light">淡</button>
+          <button class="option-btn" data-opacity="medium">中</button>
+          <button class="option-btn" data-opacity="strong">深</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer" id="compatNote"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

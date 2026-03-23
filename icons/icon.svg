@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- 背景圆 -->
+  <rect width="128" height="128" rx="28" fill="#007AFF"/>
+  <!-- 放大镜 -->
+  <circle cx="52" cy="52" r="22" fill="none" stroke="white" stroke-width="9"/>
+  <line x1="68" y1="68" x2="90" y2="90" stroke="white" stroke-width="9" stroke-linecap="round"/>
+  <!-- 高亮线条 -->
+  <rect x="22" y="82" width="54" height="8" rx="4" fill="rgba(255,230,0,0.85)"/>
+</svg>

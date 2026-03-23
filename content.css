@@ -1,0 +1,12 @@
+/*
+ * Focus Reader - Content Styles
+ * 用于 CSS Custom Highlight API 的 ::highlight 伪元素样式
+ * 注意：实际颜色值由 content.js 动态注入 <style> 标签，
+ * 此处作为初始默认值
+ */
+
+/* 默认高亮颜色（会被 JS 动态覆盖） */
+::highlight(focus-reader-line) {
+  background-color: rgba(255, 230, 0, 0.38);
+  color: inherit;
+}

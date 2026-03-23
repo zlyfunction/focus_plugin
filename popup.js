@@ -86,20 +86,31 @@ function renderUI() {
     compatNote.textContent = '';
   }
 
+  // Adaptive section: hidden when extension is disabled
+  const adaptiveSection = document.getElementById('adaptiveSection');
+  if (adaptiveSection) adaptiveSection.style.display = enabled ? '' : 'none';
+
   // Adaptive status badge
   const adaptiveStatusEl = document.getElementById('adaptiveStatus');
+  const adaptiveHintEl   = document.getElementById('adaptiveHint');
   if (adaptiveStatusEl) {
     const s = currentState.calibrationStatus;
     if (s === 'calibrated') {
-      adaptiveStatusEl.textContent = 'Calibrated ✓';
-      adaptiveStatusEl.className = 'badge badge-calibrated';
+      adaptiveStatusEl.textContent = '已校准 ✓';
+      adaptiveStatusEl.className   = 'badge badge-calibrated';
+      adaptiveStatusEl.title       = '导引圈大小已根据您的阅读速度自动调整';
+      if (adaptiveHintEl) adaptiveHintEl.textContent = '正在根据阅读速度自动调整';
     } else if (s && s.startsWith('learning:')) {
       const pct = s.split(':')[1];
-      adaptiveStatusEl.textContent = `Learning… ${pct}%`;
-      adaptiveStatusEl.className = 'badge badge-learning';
+      adaptiveStatusEl.textContent = `学习中 ${pct}%`;
+      adaptiveStatusEl.className   = 'badge badge-learning';
+      adaptiveStatusEl.title       = '正在观察您的阅读节奏，约 10 分钟后完成校准';
+      if (adaptiveHintEl) adaptiveHintEl.textContent = '正在观察您的阅读节奏';
     } else {
       adaptiveStatusEl.textContent = '—';
-      adaptiveStatusEl.className = 'badge';
+      adaptiveStatusEl.className   = 'badge';
+      adaptiveStatusEl.title       = '';
+      if (adaptiveHintEl) adaptiveHintEl.textContent = '';
     }
   }
 }

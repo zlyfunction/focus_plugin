@@ -8,8 +8,9 @@
 
   // ── 状态 ──────────────────────────────────────────────
   let enabled = false;
+  let adaptiveMode = true;
   let settings = {
-    mode: 'both',
+    mode: 'guide',
     color: 'yellow',
     opacity: 'medium',
   };
@@ -263,9 +264,8 @@
     const isImg = el && el.tagName.toLowerCase() === 'img';
     const overText = !isImg && isTextPoint(x, y);
 
-    const showGuide = settings.mode === 'guide' || settings.mode === 'both';
-    const showText  = (settings.mode === 'text' || settings.mode === 'both') &&
-                      hasCSSHighlight && textHighlight;
+    const showGuide = settings.mode === 'guide';
+    const showText  = settings.mode === 'text' && hasCSSHighlight && textHighlight;
 
     // 图片高亮
     if (isImg) applyImageHighlight(el);
@@ -343,6 +343,11 @@
       this._mouseY    = 0;
       this._tickX     = 0;
       this._tickY     = 0;
+      // Scroll state for secondary velocity signal
+      this._lastScrollY    = window.scrollY;
+      this._lastScrollT    = Date.now();
+      this._scrollVelocity = 0; // px/s, updated on scroll events
+      this._scrollListener = null;
       // Dwell detection
       this._dwellY     = 0;
       this._dwellSince = 0;
@@ -357,6 +362,8 @@
       // Idempotency guard — prevent double-interval on rapid toggle
       if (this._sampleId) clearInterval(this._sampleId);
       if (this._flushId)  clearInterval(this._flushId);
+      // F008: dedup visibilitychange listener before re-adding
+      document.removeEventListener('visibilitychange', this._onHide);
       this._domain = new URL(location.href).hostname;
       this._tickX  = this._mouseX;
       this._tickY  = this._mouseY;
@@ -364,6 +371,18 @@
       this._sampleId = setInterval(() => this._tick(),  5000);
       this._flushId  = setInterval(() => this._flush(), 30000);
       document.addEventListener('visibilitychange', this._onHide);
+      // Scroll rhythm: secondary velocity signal
+      this._scrollListener = () => {
+        const now = Date.now();
+        const dt  = (now - this._lastScrollT) / 1000; // seconds
+        if (dt > 0) {
+          const dy = Math.abs(window.scrollY - this._lastScrollY);
+          this._scrollVelocity = dy / dt; // px/s
+        }
+        this._lastScrollY = window.scrollY;
+        this._lastScrollT = now;
+      };
+      window.addEventListener('scroll', this._scrollListener, { passive: true });
     }
 
     stop() {
@@ -372,6 +391,10 @@
       this._sampleId = null;
       this._flushId  = null;
       document.removeEventListener('visibilitychange', this._onHide);
+      if (this._scrollListener) {
+        window.removeEventListener('scroll', this._scrollListener);
+        this._scrollListener = null;
+      }
       this._flush();
     }
 
@@ -407,13 +430,21 @@
 
     _tick() {
       const now = Date.now();
-      // Velocity = displacement since last tick / 5 seconds (px/s)
+      // Mouse velocity = displacement since last tick / 5 seconds (px/s)
       const dx   = this._mouseX - this._tickX;
       const dy   = this._mouseY - this._tickY;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const velocity = dist / 5; // px/s
+      const mouseVelocity = dist / 5; // px/s
       this._tickX = this._mouseX;
       this._tickY = this._mouseY;
+
+      // Blend scroll velocity (30%) with mouse velocity (70%)
+      // Fall back to mouse-only when no scroll events have fired
+      const velocity = this._scrollVelocity > 0
+        ? 0.7 * mouseVelocity + 0.3 * this._scrollVelocity
+        : mouseVelocity;
+      // Reset scroll velocity so stale readings don't persist between ticks
+      this._scrollVelocity = 0;
 
       const p = this._getProfile();
       if (dist > 10) { // ignore micro-jitter when mouse is parked
@@ -460,6 +491,15 @@
       }).catch(() => {});
     }
 
+    // F011: called by popup after storage reset so in-memory profile stays in sync
+    resetProfile(domain) {
+      delete this._profiles[domain];
+      if (domain === this._domain) {
+        this.radiusMultiplier = 1.0;
+        brushRadius = 7;
+      }
+    }
+
     _flush() {
       chrome.storage.local.set({ focusReaderProfiles: this._profiles }).catch(() => {});
     }
@@ -493,7 +533,7 @@
     applyGuideStyle();
     document.addEventListener('mousemove', onMouseMove, { passive: true });
     document.addEventListener('mouseleave', onMouseLeave);
-    adaptiveEngine.start();
+    if (adaptiveMode) adaptiveEngine.start();
     syncStatusToDOM();
   }
 
@@ -504,8 +544,20 @@
     clearImageHighlight();
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseleave', onMouseLeave);
-    adaptiveEngine.stop();
+    if (adaptiveMode) adaptiveEngine.stop(); // F013: only stop if was started
+    // Clean up any in-progress TL;DR loading spans
+    document.querySelectorAll('.fr-tldr-loading').forEach(el => el.remove());
+    // Column mode: teardown but preserve storage key so it re-enables on next enable()
+    if (window.__frColumnState) disableColumnMode();
     syncStatusToDOM();
+  }
+
+  function setAdaptiveMode(on) {
+    adaptiveMode = on;
+    if (enabled) {
+      if (on) adaptiveEngine.start();
+      else     adaptiveEngine.stop();
+    }
   }
 
   function applySettings(newSettings) {
@@ -516,22 +568,272 @@
     }
   }
 
+  // ── 阅读列模式 ────────────────────────────────────────
+  //
+  // Wraps the main content element in a 65ch-width column. Dims siblings.
+  // Full teardown removes the wrapper and restores siblings.
+  //
+  function getBestContentEl() {
+    const selectors = ['article', 'main', '[role="main"]', '.post-content', '.article-body', '.entry-content'];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el && el.offsetWidth > 0) return el;
+    }
+    return document.body;
+  }
+
+  function enableColumnMode() {
+    if (window.__frColumnState) return; // already active
+
+    const target = getBestContentEl();
+    // F010: refuse to wrap body — no suitable content element found
+    if (target === document.body) {
+      showToast('未找到合适的文章内容，无法启用列模式');
+      chrome.storage.local.set({ focusReaderColumnMode: false });
+      return;
+    }
+    window.__frColumnTarget = target;
+
+    // Create wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'fr-column-wrapper';
+    wrapper.style.cssText = 'max-width:65ch;margin:0 auto;box-sizing:border-box;';
+
+    // Wrap target: insert wrapper before target, move target inside
+    target.parentNode.insertBefore(wrapper, target);
+    wrapper.appendChild(target);
+    window.__frColumnWrapper = wrapper; // F004: store wrapper ref for safe teardown
+
+    // Dim siblings (HTMLElement only, not the wrapper itself)
+    Array.from(wrapper.parentNode.children).forEach(el => {
+      if (el === wrapper || !(el instanceof HTMLElement)) return;
+      el.dataset.frDimOrig = el.style.opacity || '';
+      el.style.opacity = '0.15';
+      el.style.pointerEvents = 'none';
+    });
+
+    window.__frColumnState = true;
+
+    // SPA navigation: monkey-patch history.pushState
+    if (!window.__frPushStatePatched) {
+      const _push = history.pushState;
+      history.pushState = function (...args) {
+        _push.apply(this, args);
+        setTimeout(() => { if (window.__frColumnState) disableColumnMode(); }, 500);
+      };
+      window.addEventListener('popstate', () => {
+        if (window.__frColumnState) disableColumnMode();
+      });
+      window.__frPushStatePatched = true;
+    }
+  }
+
+  function disableColumnMode() {
+    if (!window.__frColumnState) return;
+
+    // F004: use stored wrapper ref directly (target may have been detached by SPA)
+    const wrapper = window.__frColumnWrapper;
+    const wrapperParent = wrapper ? wrapper.parentNode : null;
+
+    if (wrapper && wrapperParent) {
+      // Move target back out if it's still inside the wrapper
+      if (window.__frColumnTarget && wrapper.contains(window.__frColumnTarget)) {
+        wrapperParent.insertBefore(window.__frColumnTarget, wrapper);
+      }
+      wrapper.remove();
+    }
+
+    // Restore dimmed siblings
+    if (wrapperParent) {
+      Array.from(wrapperParent.children).forEach(el => {
+        if (!(el instanceof HTMLElement) || !('frDimOrig' in el.dataset)) return;
+        el.style.opacity = el.dataset.frDimOrig;
+        el.style.pointerEvents = '';
+        delete el.dataset.frDimOrig;
+      });
+    }
+
+    window.__frColumnTarget  = null;
+    window.__frColumnWrapper = null;
+    window.__frColumnState   = false;
+  }
+
+  function setColumnMode(on) {
+    if (on) enableColumnMode();
+    else {
+      disableColumnMode();
+      chrome.storage.local.set({ focusReaderColumnMode: false });
+    }
+  }
+
+  // ── Toast helper ─────────────────────────────────────
+  function showToast(msg) {
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.cssText = [
+      'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
+      'background:rgba(0,0,0,0.75)', 'color:#fff', 'font-size:13px',
+      'padding:8px 16px', 'border-radius:20px', 'z-index:2147483647',
+      'pointer-events:none', 'transition:opacity 0.3s ease',
+    ].join(';');
+    document.documentElement.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 2200);
+  }
+
+  // ── TL;DR: in-place summarize / translate ─────────────
+  function handleTldr(mode) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      showToast('请先选中要处理的文字');
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+
+    // Cross-block guard: reject multi-paragraph selections
+    // F014: cloneContents() throws on cross-shadow-root selections — catch gracefully
+    let guardFragment, originalFragment;
+    try {
+      guardFragment = range.cloneContents();
+    } catch (e) {
+      showToast('所选内容跨越了不支持的元素边界');
+      return;
+    }
+    const blockTags = 'p,div,h1,h2,h3,h4,h5,h6,li,blockquote';
+    if (guardFragment.querySelectorAll(blockTags).length > 1) {
+      showToast('请选择单段落内的文字');
+      return;
+    }
+
+    // Rapid invocation guard: abort if already loading
+    if (document.querySelector('.fr-tldr-loading')) return;
+
+    const text = range.toString().trim();
+    if (!text) return;
+
+    // Snapshot original content BEFORE any DOM mutation
+    originalFragment = guardFragment; // reuse the already-cloned fragment
+
+    // Replace selection with loading span
+    // F006: wrap DOM mutation in try/catch — if connect fails, we can restore
+    const loadingSpan = document.createElement('span');
+    loadingSpan.className = 'fr-tldr-loading';
+    loadingSpan.textContent = mode === 'summarize' ? '摘要中…' : '翻译中…';
+    loadingSpan.style.cssText = 'opacity:0.6;font-style:italic;cursor:default;';
+    try {
+      range.deleteContents();
+      range.insertNode(loadingSpan);
+    } catch (e) {
+      showToast('无法处理所选内容，请重试');
+      return;
+    }
+    sel.removeAllRanges();
+
+    let port;
+    try {
+      port = chrome.runtime.connect({ name: 'tldr' });
+    } catch (e) {
+      // F006: connect failed (e.g. extension context invalidated) — restore DOM
+      loadingSpan.replaceWith(originalFragment.cloneNode(true));
+      showToast('扩展连接失败，请刷新页面重试');
+      return;
+    }
+    let settled = false;
+
+    function restoreOriginal() {
+      if (!document.contains(loadingSpan)) return;
+      loadingSpan.replaceWith(originalFragment.cloneNode(true));
+    }
+
+    port.onDisconnect.addListener(() => {
+      if (!settled) restoreOriginal();
+    });
+
+    port.onMessage.addListener((msg) => {
+      settled = true;
+      port.disconnect();
+
+      if (!document.contains(loadingSpan)) return;
+
+      if (msg.error) {
+        const errMsg = msg.error === 'no_api_key'
+          ? '请先在插件中设置 API Key'
+          : msg.error === 'timeout'
+            ? '请求超时，请重试'
+            : '请求失败，请重试';
+        showToast(errMsg);
+        restoreOriginal();
+        return;
+      }
+
+      // Build result wrapper
+      const wrapper = document.createElement('span');
+      wrapper.className = 'fr-tldr-result';
+      wrapper.style.cssText = 'background:rgba(255,220,0,0.18);border-radius:3px;padding:0 2px;';
+
+      const resultSpan = document.createElement('span');
+      resultSpan.textContent = msg.result; // textContent — never innerHTML (XSS prevention)
+      wrapper.appendChild(resultSpan);
+
+      // Restore button
+      const restoreBtn = document.createElement('button');
+      restoreBtn.textContent = '[原文]';
+      restoreBtn.style.cssText = [
+        'margin-left:4px', 'font-size:0.85em', 'color:#007aff',
+        'background:none', 'border:none', 'cursor:pointer',
+        'padding:0', 'font-family:inherit',
+      ].join(';');
+      restoreBtn.addEventListener('click', () => {
+        restoreBtn.remove(); // remove button before re-inserting fragment — prevents double-invocation
+        wrapper.replaceWith(originalFragment.cloneNode(true));
+      });
+      wrapper.appendChild(restoreBtn);
+
+      loadingSpan.replaceWith(wrapper);
+    });
+
+    const lang = navigator.language || 'zh-CN';
+    port.postMessage({ text, mode, lang });
+  }
+
   // ── 消息通信 ─────────────────────────────────────────
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     switch (message.action) {
-      case 'enable':        enable();                             sendResponse({ ok: true }); break;
-      case 'disable':       disable();                            sendResponse({ ok: true }); break;
-      case 'applySettings': applySettings(message.settings);     sendResponse({ ok: true }); break;
-      case 'getState':      sendResponse({ enabled, settings, hasCSSHighlight, calibrationStatus: adaptiveEngine.calibrationStatus }); break;
+      case 'enable':           enable();                              sendResponse({ ok: true }); break;
+      case 'disable':          disable();                             sendResponse({ ok: true }); break;
+      case 'applySettings':    applySettings(message.settings);      sendResponse({ ok: true }); break;
+      case 'setAdaptiveMode':  setAdaptiveMode(message.enabled);     sendResponse({ ok: true }); break;
+      case 'setColumnMode':    setColumnMode(message.enabled);       sendResponse({ ok: true }); break;
+      case 'resetProfile':     adaptiveEngine.resetProfile(message.domain); sendResponse({ ok: true }); break;
+      // Keyboard commands forwarded from background.js
+      case 'tldr-summarize':   if (enabled) handleTldr('summarize'); sendResponse({ ok: true }); break;
+      case 'tldr-translate':   if (enabled) handleTldr('translate'); sendResponse({ ok: true }); break;
+      case 'toggle-extension': {
+        const next = !enabled;
+        chrome.storage.local.set({ focusReaderEnabled: next });
+        next ? enable() : disable();
+        sendResponse({ ok: true });
+        break;
+      }
+      case 'getState':
+        sendResponse({ enabled, settings, hasCSSHighlight, adaptiveMode, calibrationStatus: adaptiveEngine.calibrationStatus });
+        break;
     }
     return true;
   });
 
   // ── 初始化 ───────────────────────────────────────────
-  chrome.storage.local.get(['focusReaderEnabled', 'focusReaderSettings'])
+  chrome.storage.local.get(['focusReaderEnabled', 'focusReaderSettings', 'focusReaderAdaptive', 'focusReaderColumnMode'])
     .then((result) => {
       if (result.focusReaderSettings) settings = { ...settings, ...result.focusReaderSettings };
+      // v1.2 migration: 'both' mode removed — fall back to 'guide'
+      if (settings.mode === 'both') {
+        settings.mode = 'guide';
+        chrome.storage.local.set({ focusReaderSettings: settings });
+      }
+      if (result.focusReaderAdaptive === false) adaptiveMode = false;
       if (result.focusReaderEnabled !== false) enable();
+      if (result.focusReaderColumnMode === true) enableColumnMode();
     })
     .catch(() => enable());
 

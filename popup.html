@@ -188,6 +188,21 @@
       border-radius: 4px;
     }
 
+    .badge-learning {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .badge-calibrated {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .badge-learning   { background: #3a2a1a; color: #ff9800; }
+      .badge-calibrated { background: #1a2e1a; color: #66bb6a; }
+    }
+
     .footer {
       padding: 6px 16px 12px;
       font-size: 11px;
@@ -242,6 +257,14 @@
           <button class="option-btn" data-opacity="medium">中</button>
           <button class="option-btn" data-opacity="strong">深</button>
         </div>
+      </div>
+    </div>
+
+    <div class="section-title">Adaptive</div>
+    <div class="card">
+      <div class="card-row">
+        <span class="row-label">Focus learning</span>
+        <span class="badge" id="adaptiveStatus">—</span>
       </div>
     </div>
 

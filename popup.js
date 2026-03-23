@@ -85,6 +85,23 @@ function renderUI() {
   } else {
     compatNote.textContent = '';
   }
+
+  // Adaptive status badge
+  const adaptiveStatusEl = document.getElementById('adaptiveStatus');
+  if (adaptiveStatusEl) {
+    const s = currentState.calibrationStatus;
+    if (s === 'calibrated') {
+      adaptiveStatusEl.textContent = 'Calibrated ✓';
+      adaptiveStatusEl.className = 'badge badge-calibrated';
+    } else if (s && s.startsWith('learning:')) {
+      const pct = s.split(':')[1];
+      adaptiveStatusEl.textContent = `Learning… ${pct}%`;
+      adaptiveStatusEl.className = 'badge badge-learning';
+    } else {
+      adaptiveStatusEl.textContent = '—';
+      adaptiveStatusEl.className = 'badge';
+    }
+  }
 }
 
 // ── 事件绑定 ──────────────────────────────────────────

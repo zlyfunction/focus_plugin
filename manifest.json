@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Focus Reader",
-  "version": "1.0",
+  "version": "1.1",
   "description": "阅读辅助插件：跟踪鼠标位置，高亮附近文字，减少视觉干扰",
 
   "permissions": ["storage"],

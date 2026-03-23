@@ -161,8 +161,8 @@
     `;
   }
 
-  // ── 画笔范围：光标前后 N 个字符 ──────────────────────
-  const BRUSH_RADIUS = 7;
+  // ── 画笔范围：光标前后 N 个字符（adaptive engine 可写）──
+  let brushRadius = 7;
 
   function getPaintbrushRange(x, y) {
     if (!textHighlight) return null;
@@ -173,8 +173,8 @@
     const len = node.textContent.length;
     if (!len) return null;
     const pos   = cr.startOffset;
-    const start = Math.max(0, pos - BRUSH_RADIUS);
-    const end   = Math.min(len, pos + BRUSH_RADIUS + 1);
+    const start = Math.max(0, pos - brushRadius);
+    const end   = Math.min(len, pos + brushRadius + 1);
     if (start >= end) return null;
     const range = document.createRange();
     range.setStart(node, start);
@@ -271,15 +271,18 @@
     if (isImg) applyImageHighlight(el);
     else       clearImageHighlight();
 
-    // 更新 lerp 目标
+    // 更新 lerp 目标（radius scaled by adaptive engine）
     if (guideEl && showGuide) {
       if (overText) {
         const lineH = getLineHeightAt(x, y);
-        guideTargetW  = Math.max(lineH * 5.5, 90);
-        guideTargetH  = Math.max(lineH * 1.5, 20);
+        const rm    = adaptiveEngine.radiusMultiplier;
+        guideTargetW  = Math.max(lineH * 5.5, 90) * rm;
+        guideTargetH  = Math.max(lineH * 1.5, 20) * rm;
         guideTargetX  = x;
         guideTargetY  = y;
         guideTargetOp = 1;
+        // Dwell pulse: one-shot nudge when cursor stationary >2.5s
+        if (adaptiveEngine.shouldPulse()) triggerDwellPulse();
       } else {
         guideTargetOp = 0;
       }
@@ -304,6 +307,7 @@
   // ── 事件监听 ─────────────────────────────────────────
   function onMouseMove(e) {
     if (!enabled) return;
+    adaptiveEngine.track(e.clientX, e.clientY);
     scheduleUpdate(e.clientX, e.clientY);
   }
 
@@ -314,7 +318,174 @@
     clearImageHighlight();
   }
 
+  // ── AdaptiveEngine ────────────────────────────────────
+  //
+  // Signal flow (per domain, stored in chrome.storage.local):
+  //
+  //   mousemove → track(x,y)
+  //        │
+  //        └── every 5s: _tick()
+  //                ├── velocity = displacement / 5s  (px/s)
+  //                ├── push sample → prune >3 days
+  //                ├── activeMs += 5000 (if moved >10px)
+  //                └── _adapt() — after 10min calibration
+  //                        ├── avg velocity >300 → radius 0.8×
+  //                        ├── avg velocity 100–300 → radius 1.0×
+  //                        └── avg velocity <100  → radius 1.4×
+  //
+  class AdaptiveEngine {
+    constructor() {
+      this.radiusMultiplier = 1.0;
+      this._profiles  = {};
+      this._domain    = '';
+      // Mouse state for velocity computation
+      this._mouseX    = 0;
+      this._mouseY    = 0;
+      this._tickX     = 0;
+      this._tickY     = 0;
+      // Dwell detection
+      this._dwellY     = 0;
+      this._dwellSince = 0;
+      this._pulseFired = false;
+      // Timers
+      this._sampleId  = null;
+      this._flushId   = null;
+      this._onHide    = () => { if (document.visibilityState === 'hidden') this._flush(); };
+    }
+
+    start() {
+      // Idempotency guard — prevent double-interval on rapid toggle
+      if (this._sampleId) clearInterval(this._sampleId);
+      if (this._flushId)  clearInterval(this._flushId);
+      this._domain = new URL(location.href).hostname;
+      this._tickX  = this._mouseX;
+      this._tickY  = this._mouseY;
+      this._loadProfiles();
+      this._sampleId = setInterval(() => this._tick(),  5000);
+      this._flushId  = setInterval(() => this._flush(), 30000);
+      document.addEventListener('visibilitychange', this._onHide);
+    }
+
+    stop() {
+      clearInterval(this._sampleId);
+      clearInterval(this._flushId);
+      this._sampleId = null;
+      this._flushId  = null;
+      document.removeEventListener('visibilitychange', this._onHide);
+      this._flush();
+    }
+
+    // Call from onMouseMove
+    track(x, y) {
+      this._mouseX = x;
+      this._mouseY = y;
+      // Dwell: reset timer when cursor moves vertically more than 8px
+      if (Math.abs(y - this._dwellY) > 8) {
+        this._dwellY     = y;
+        this._dwellSince = Date.now();
+        this._pulseFired = false;
+      }
+    }
+
+    // Returns true once per dwell (cursor stationary >2.5s). One-shot per dwell event.
+    shouldPulse() {
+      if (this._pulseFired) return false;
+      if (Date.now() - this._dwellSince > 2500) {
+        this._pulseFired = true;
+        return true;
+      }
+      return false;
+    }
+
+    // 'calibrated' | 'learning:N' (N = 0–99)
+    get calibrationStatus() {
+      const p = this._getProfile();
+      if (p.calibrated) return 'calibrated';
+      const pct = Math.min(99, Math.round(p.activeMs / (10 * 60 * 1000) * 100));
+      return 'learning:' + pct;
+    }
+
+    _tick() {
+      const now = Date.now();
+      // Velocity = displacement since last tick / 5 seconds (px/s)
+      const dx   = this._mouseX - this._tickX;
+      const dy   = this._mouseY - this._tickY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const velocity = dist / 5; // px/s
+      this._tickX = this._mouseX;
+      this._tickY = this._mouseY;
+
+      const p = this._getProfile();
+      if (dist > 10) { // ignore micro-jitter when mouse is parked
+        p.samples.push({ ts: now, v: Math.round(velocity) });
+        p.activeMs += 5000;
+      }
+
+      // Prune samples older than 3 days
+      const cutoff = now - 3 * 24 * 60 * 60 * 1000;
+      p.samples = p.samples.filter(s => s.ts > cutoff);
+
+      // Calibration: 10 minutes of active reading
+      if (!p.calibrated && p.activeMs >= 10 * 60 * 1000) p.calibrated = true;
+
+      this._adapt(p);
+      // Sync DOM bridge so page.evaluate() can read status in tests
+      document.documentElement.dataset.focusReaderCalibration = this.calibrationStatus;
+    }
+
+    _adapt(p) {
+      if (!p.calibrated) return;
+      const now    = Date.now();
+      const recent = p.samples.filter(s => s.ts > now - 60000);
+      if (!recent.length) return;
+      const avg = recent.reduce((sum, s) => sum + s.v, 0) / recent.length;
+
+      if (avg > 300)       this.radiusMultiplier = 0.8; // flow: scanning fast
+      else if (avg >= 100) this.radiusMultiplier = 1.0; // normal reading
+      else                 this.radiusMultiplier = 1.4; // slow / struggling
+
+      brushRadius = Math.round(7 * this.radiusMultiplier);
+    }
+
+    _getProfile() {
+      if (!this._profiles[this._domain]) {
+        this._profiles[this._domain] = { samples: [], calibrated: false, activeMs: 0 };
+      }
+      return this._profiles[this._domain];
+    }
+
+    _loadProfiles() {
+      chrome.storage.local.get(['focusReaderProfiles']).then(r => {
+        if (r.focusReaderProfiles) this._profiles = r.focusReaderProfiles;
+      }).catch(() => {});
+    }
+
+    _flush() {
+      chrome.storage.local.set({ focusReaderProfiles: this._profiles }).catch(() => {});
+    }
+  }
+
+  const adaptiveEngine = new AdaptiveEngine();
+
+  // Dwell pulse: brief brightness flash nudges the eye to keep moving
+  function triggerDwellPulse() {
+    if (!guideEl) return;
+    guideEl.style.transition = 'filter 0.1s ease-in';
+    guideEl.style.filter = 'brightness(2.2)';
+    setTimeout(() => {
+      if (!guideEl) return;
+      guideEl.style.transition = 'filter 0.25s ease-out';
+      guideEl.style.filter = '';
+      setTimeout(() => { if (guideEl) guideEl.style.transition = ''; }, 250);
+    }, 100);
+  }
+
   // ── 启用 / 禁用 ──────────────────────────────────────
+  function syncStatusToDOM() {
+    document.documentElement.dataset.focusReaderEnabled     = String(enabled);
+    document.documentElement.dataset.focusReaderCalibration = adaptiveEngine.calibrationStatus;
+  }
+
   function enable() {
     enabled = true;
     updateHighlightColor();
@@ -322,6 +493,8 @@
     applyGuideStyle();
     document.addEventListener('mousemove', onMouseMove, { passive: true });
     document.addEventListener('mouseleave', onMouseLeave);
+    adaptiveEngine.start();
+    syncStatusToDOM();
   }
 
   function disable() {
@@ -331,6 +504,8 @@
     clearImageHighlight();
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseleave', onMouseLeave);
+    adaptiveEngine.stop();
+    syncStatusToDOM();
   }
 
   function applySettings(newSettings) {
@@ -347,7 +522,7 @@
       case 'enable':        enable();                             sendResponse({ ok: true }); break;
       case 'disable':       disable();                            sendResponse({ ok: true }); break;
       case 'applySettings': applySettings(message.settings);     sendResponse({ ok: true }); break;
-      case 'getState':      sendResponse({ enabled, settings, hasCSSHighlight }); break;
+      case 'getState':      sendResponse({ enabled, settings, hasCSSHighlight, calibrationStatus: adaptiveEngine.calibrationStatus }); break;
     }
     return true;
   });
@@ -363,4 +538,8 @@
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     if (enabled) { updateHighlightColor(); applyGuideStyle(); }
   });
+
+  // Testing bridge: content scripts run in an isolated world; page.evaluate() runs in
+  // the main world. window properties set here are invisible to page.evaluate().
+  // DOM attributes ARE shared between worlds, so we write status there instead.
 })();

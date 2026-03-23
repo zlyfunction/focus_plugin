@@ -245,7 +245,14 @@
         <div class="option-group">
           <button class="option-btn" data-mode="guide">导引条</button>
           <button class="option-btn" data-mode="text">文字</button>
-          <button class="option-btn" data-mode="both">两者</button>
+        </div>
+      </div>
+      <div class="card-row">
+        <span class="row-label">阅读列模式</span>
+        <div class="toggle-wrap">
+          <div class="toggle-track" id="columnToggle">
+            <div class="toggle-thumb"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -275,12 +282,38 @@
       <div class="section-title">自适应</div>
       <div class="card">
         <div class="card-row">
+          <span class="row-label">自适应学习</span>
+          <div class="toggle-wrap">
+            <div class="toggle-track" id="adaptiveToggle">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card-row" id="adaptiveStatusRow">
           <div>
-            <span class="row-label" style="color: #8e8e93">自适应学习</span>
+            <span class="row-label" style="color: #8e8e93">校准状态</span>
             <div id="adaptiveHint" style="font-size:10px;color:#aeaeb2;margin-top:1px;min-height:14px"></div>
           </div>
           <span class="badge" id="adaptiveStatus" title="">—</span>
         </div>
+      </div>
+    </div>
+
+    <div id="profilesSection" style="display:none">
+      <div class="section-title">域名档案</div>
+      <div class="card" id="profilesCard"></div>
+    </div>
+
+    <div class="section-title">AI 功能</div>
+    <div class="card">
+      <div class="card-row">
+        <span class="row-label">AI API Key</span>
+        <input type="password" id="apiKeyInput" placeholder="sk-…"
+          style="font-size:11px;border:none;background:transparent;color:inherit;
+                 text-align:right;width:120px;outline:none;font-family:inherit;" />
+      </div>
+      <div class="card-row">
+        <span class="row-label" style="color:#8e8e93;font-size:11px">摘要 Alt+T &nbsp;·&nbsp; 翻译 Alt+Shift+T</span>
       </div>
     </div>
 

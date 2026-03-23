@@ -142,6 +142,11 @@
       font-family: inherit;
     }
 
+    .option-btn:focus-visible {
+      outline: 2px solid #007aff;
+      outline-offset: 2px;
+    }
+
     .option-btn:hover {
       background: #d1d1d6;
     }
@@ -168,6 +173,11 @@
 
     .color-dot:hover {
       transform: scale(1.1);
+    }
+
+    .color-dot:focus-visible {
+      outline: 2px solid #007aff;
+      outline-offset: 3px;
     }
 
     .color-dot.active {
@@ -244,10 +254,10 @@
       <div class="card-row">
         <span class="row-label">高亮颜色</span>
         <div class="color-group">
-          <div class="color-dot" data-color="yellow" title="黄色"></div>
-          <div class="color-dot" data-color="green"  title="绿色"></div>
-          <div class="color-dot" data-color="blue"   title="蓝色"></div>
-          <div class="color-dot" data-color="pink"   title="粉色"></div>
+          <div class="color-dot" data-color="yellow" title="黄色" tabindex="0" role="radio" aria-label="黄色"></div>
+          <div class="color-dot" data-color="green"  title="绿色" tabindex="0" role="radio" aria-label="绿色"></div>
+          <div class="color-dot" data-color="blue"   title="蓝色" tabindex="0" role="radio" aria-label="蓝色"></div>
+          <div class="color-dot" data-color="pink"   title="粉色" tabindex="0" role="radio" aria-label="粉色"></div>
         </div>
       </div>
       <div class="card-row">

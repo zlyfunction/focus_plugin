@@ -136,6 +136,9 @@ document.querySelectorAll('[data-mode]').forEach(btn => {
 // 颜色选择
 document.querySelectorAll('[data-color]').forEach(dot => {
   dot.addEventListener('click', () => updateSettings({ color: dot.dataset.color }));
+  dot.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateSettings({ color: dot.dataset.color }); }
+  });
 });
 
 // 强度按钮

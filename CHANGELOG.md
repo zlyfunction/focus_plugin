@@ -17,6 +17,15 @@ All notable changes to Focus Reader will be documented here.
 ### Changed
 - `brushRadius` changed from `const` to `let` to allow runtime adjustment by AdaptiveEngine
 - `getState` message response now includes `calibrationStatus`
+- Adaptive section label and badge text localized to Chinese
+- Adaptive section hidden when extension is disabled
+- Footer compat note left-aligned (avoids ragged wrap in narrow popup)
+
+### Improved
+- Touch targets: option buttons raised to 32px min-height; color dots enlarged to 26px
+- Keyboard accessibility: `focus-visible` rings on buttons and color dots; color dots gain `tabindex`, `role="radio"`, `aria-label`, and `keydown` (Enter/Space) support
+- Adaptive section wrapped in `aria-live="polite"` for screen reader announcements
+- Hint text line added below adaptive label for contextual status messages
 
 ## [1.0] - Initial release
 

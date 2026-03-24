@@ -17,9 +17,10 @@ A soft ellipse follows your mouse as you read. Text inside the ellipse gets high
 
 Each website calibrates independently. Calibration takes about 10 minutes of active reading. A dwell pulse (brief brightness flash) nudges the eye to keep moving when the cursor sits still for 2.5+ seconds.
 
-**v1.2 features:**
-- **TL;DR summarize** (Alt+T) — select text → in-place AI summary; original restored via 还原 button
-- **In-place translate** (Alt+Shift+T) — translate selected text to English or Chinese
+**v1.3 features:**
+- **TL;DR summarize** (Alt+T) — select text → in-place AI summary in same language as source; result cached, toggle between original and summary without re-calling the API
+- **In-place translate** (Alt+Shift+T) — translate selected text to English or Chinese; cached for instant toggle
+- **Gemini API support** — configure `https://generativelanguage.googleapis.com/v1beta/models` as endpoint with `gemini-2.5-flash` model; auto-detects and switches request format
 - **Reading column mode** — narrows page to a 65ch column for distraction-free reading
 - **Alt+F toggle** — keyboard shortcut to enable/disable the extension globally
 - **Domain profile viewer** — see your calibrated reading speed per website in the popup
@@ -45,7 +46,9 @@ This extension is not on the Chrome Web Store. Load it manually:
 | 强度 (Intensity) | 淡 (light) / 中 (medium) / 深 (strong) |
 | 自适应 (Adaptive) | Toggle + status badge: 学习中 N% → 已校准 ✓ |
 | 域名档案 (Domain profiles) | Per-site reading speed + reset button |
-| AI API Key | Key for TL;DR and translate (Alt+T / Alt+Shift+T) |
+| API Key | Key for TL;DR and translate (OpenAI or Gemini) |
+| 接口地址 (Endpoint) | API endpoint URL (OpenAI-compatible or Gemini) |
+| 模型 (Model) | Model name, e.g. `gpt-4o-mini` or `gemini-2.5-flash` |
 
 ## Browser compatibility
 
@@ -71,7 +74,7 @@ Tests use Playwright with a real Chrome instance loaded with the extension (`--l
 
 ```
 manifest.json          — Extension manifest (MV3)
-background.js          — Service worker: install defaults, keyboard command forwarding, OpenAI-compatible API proxy
+background.js          — Service worker: install defaults, keyboard command forwarding, OpenAI/Gemini API proxy
 content.js             — Main logic injected into every page
   ├─ Guide ellipse      lerp-animated div following the cursor
   ├─ Text brush         CSS Custom Highlight API (or DOM span fallback)

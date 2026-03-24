@@ -6,6 +6,12 @@
   if (window.__focusReaderInjected) return;
   window.__focusReaderInjected = true;
 
+  // Extension context guard — returns false if the extension has been reloaded/invalidated.
+  // After invalidation, all chrome.* calls throw; we use this to bail out gracefully.
+  function alive() {
+    try { return !!chrome.runtime.id; } catch (e) { return false; }
+  }
+
   // ── 状态 ──────────────────────────────────────────────
   let enabled = false;
   let adaptiveMode = true;
@@ -429,6 +435,8 @@
     }
 
     _tick() {
+      // Stop intervals silently if extension was reloaded
+      if (!alive()) { this.stop(); return; }
       const now = Date.now();
       // Mouse velocity = displacement since last tick / 5 seconds (px/s)
       const dx   = this._mouseX - this._tickX;
@@ -486,6 +494,7 @@
     }
 
     _loadProfiles() {
+      if (!alive()) return;
       chrome.storage.local.get(['focusReaderProfiles']).then(r => {
         if (r.focusReaderProfiles) this._profiles = r.focusReaderProfiles;
       }).catch(() => {});
@@ -501,6 +510,7 @@
     }
 
     _flush() {
+      if (!alive()) return;
       chrome.storage.local.set({ focusReaderProfiles: this._profiles }).catch(() => {});
     }
   }
@@ -589,7 +599,7 @@
     // F010: refuse to wrap body — no suitable content element found
     if (target === document.body) {
       showToast('未找到合适的文章内容，无法启用列模式');
-      chrome.storage.local.set({ focusReaderColumnMode: false });
+      if (alive()) chrome.storage.local.set({ focusReaderColumnMode: false });
       return;
     }
     window.__frColumnTarget = target;
@@ -665,14 +675,14 @@
     window.__frColumnWrapper = null;
     window.__frColumnState   = false;
     // BUG-003: clear storage so SPA-triggered teardown doesn't re-enable on next page load
-    chrome.storage.local.set({ focusReaderColumnMode: false });
+    if (alive()) chrome.storage.local.set({ focusReaderColumnMode: false });
   }
 
   function setColumnMode(on) {
     if (on) enableColumnMode();
     else {
       disableColumnMode();
-      chrome.storage.local.set({ focusReaderColumnMode: false });
+      if (alive()) chrome.storage.local.set({ focusReaderColumnMode: false });
     }
   }
 
@@ -691,6 +701,16 @@
   }
 
   // ── TL;DR: in-place summarize / translate ─────────────
+  //
+  // Uses a persistent hostSpan that stays in the DOM through all state transitions:
+  //   loading → result ([原文] button) → original ([再摘要/翻译] button) → loading → …
+  //
+  const _TLDR_BTN = [
+    'margin-left:4px', 'font-size:0.85em', 'color:#007aff',
+    'background:none', 'border:none', 'cursor:pointer',
+    'padding:0', 'font-family:inherit',
+  ].join(';');
+
   function handleTldr(mode) {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
@@ -700,119 +720,128 @@
 
     const range = sel.getRangeAt(0);
 
-    // Cross-block guard: reject multi-paragraph selections
-    // F014: cloneContents() throws on cross-shadow-root selections — catch gracefully
-    let guardFragment, originalFragment;
+    // Cross-block guard — F014: cloneContents() throws on cross-shadow-root selections
+    let originalFragment;
     try {
-      guardFragment = range.cloneContents();
+      originalFragment = range.cloneContents();
     } catch (e) {
       showToast('所选内容跨越了不支持的元素边界');
       return;
     }
     const blockTags = 'p,div,h1,h2,h3,h4,h5,h6,li,blockquote';
-    if (guardFragment.querySelectorAll(blockTags).length > 1) {
+    if (originalFragment.querySelectorAll(blockTags).length > 1) {
       showToast('请选择单段落内的文字');
       return;
     }
 
-    // Rapid invocation guard: abort if already loading
+    // Rapid invocation guard
     if (document.querySelector('.fr-tldr-loading')) return;
 
     const text = range.toString().trim();
     if (!text) return;
-    // BUG-008: cap text length to prevent runaway API billing and context overflow
+    // BUG-008: cap text length
     if (text.length > 2000) {
       showToast('请选择较短的文字（2000字以内）');
       return;
     }
 
-    // Snapshot original content BEFORE any DOM mutation
-    originalFragment = guardFragment; // reuse the already-cloned fragment
-
-    // Replace selection with loading span
-    // F006: wrap DOM mutation in try/catch — if connect fails, we can restore
-    const loadingSpan = document.createElement('span');
-    loadingSpan.className = 'fr-tldr-loading';
-    loadingSpan.textContent = mode === 'summarize' ? '摘要中…' : '翻译中…';
-    loadingSpan.style.cssText = 'opacity:0.6;font-style:italic;cursor:default;';
+    // Persistent host span — survives all state transitions
+    const hostSpan = document.createElement('span');
+    hostSpan.style.cssText = 'display:inline;';
     try {
       range.deleteContents();
-      range.insertNode(loadingSpan);
+      range.insertNode(hostSpan);
     } catch (e) {
       showToast('无法处理所选内容，请重试');
       return;
     }
     sel.removeAllRanges();
 
-    let port;
-    try {
-      port = chrome.runtime.connect({ name: 'tldr' });
-    } catch (e) {
-      // F006: connect failed (e.g. extension context invalidated) — restore DOM
-      loadingSpan.replaceWith(originalFragment.cloneNode(true));
-      showToast('扩展连接失败，请刷新页面重试');
-      return;
-    }
-    let settled = false;
+    const lang = navigator.language || 'zh-CN';
+    const showLabel = mode === 'summarize' ? '[摘要]' : '[译文]';
+    let cachedResult = null; // cached so toggle never re-calls the API
 
-    function restoreOriginal() {
-      if (!document.contains(loadingSpan)) return;
-      loadingSpan.replaceWith(originalFragment.cloneNode(true));
+    function showLoading() {
+      hostSpan.innerHTML = '';
+      const s = document.createElement('span');
+      s.className = 'fr-tldr-loading';
+      s.textContent = mode === 'summarize' ? '摘要中…' : '翻译中…';
+      s.style.cssText = 'opacity:0.6;font-style:italic;cursor:default;';
+      hostSpan.appendChild(s);
     }
 
-    port.onDisconnect.addListener(() => {
-      if (!settled) restoreOriginal();
-    });
-
-    port.onMessage.addListener((msg) => {
-      settled = true;
-      port.disconnect();
-
-      if (!document.contains(loadingSpan)) return;
-
-      if (msg.error) {
-        const errMsg = msg.error === 'no_api_key'
-          ? '请先在插件中设置 API Key'
-          : msg.error === 'timeout'
-            ? '请求超时，请重试'
-            : '请求失败，请重试';
-        showToast(errMsg);
-        restoreOriginal();
-        return;
+    // Show original text + [摘要]/[译文] button (uses cache, never re-calls API)
+    function showOriginal() {
+      hostSpan.style.cssText = 'display:inline;';
+      hostSpan.innerHTML = '';
+      hostSpan.appendChild(originalFragment.cloneNode(true));
+      if (cachedResult !== null) {
+        const btn = document.createElement('button');
+        btn.textContent = showLabel;
+        btn.style.cssText = _TLDR_BTN;
+        btn.addEventListener('click', () => showResult(cachedResult));
+        hostSpan.appendChild(btn);
       }
+    }
 
-      // Build result wrapper
-      const wrapper = document.createElement('span');
-      wrapper.className = 'fr-tldr-result';
-      wrapper.style.cssText = 'background:rgba(255,220,0,0.18);border-radius:3px;padding:0 2px;';
-
+    // Show result text + [原文] button
+    function showResult(resultText) {
+      hostSpan.style.cssText = 'display:inline;background:rgba(255,220,0,0.18);border-radius:3px;padding:0 2px;';
+      hostSpan.innerHTML = '';
       const resultSpan = document.createElement('span');
-      resultSpan.textContent = msg.result; // textContent — never innerHTML (XSS prevention)
-      wrapper.appendChild(resultSpan);
-
-      // Restore button
+      resultSpan.textContent = resultText; // textContent — never innerHTML (XSS prevention)
+      hostSpan.appendChild(resultSpan);
       const restoreBtn = document.createElement('button');
       restoreBtn.textContent = '[原文]';
-      restoreBtn.style.cssText = [
-        'margin-left:4px', 'font-size:0.85em', 'color:#007aff',
-        'background:none', 'border:none', 'cursor:pointer',
-        'padding:0', 'font-family:inherit',
-      ].join(';');
-      restoreBtn.addEventListener('click', () => {
-        restoreBtn.remove(); // remove button before re-inserting fragment — prevents double-invocation
-        wrapper.replaceWith(originalFragment.cloneNode(true));
+      restoreBtn.style.cssText = _TLDR_BTN;
+      restoreBtn.addEventListener('click', showOriginal);
+      hostSpan.appendChild(restoreBtn);
+    }
+
+    function runApi() {
+      if (!alive()) { showToast('扩展连接失败，请刷新页面重试'); return; }
+      showLoading();
+      let port;
+      try {
+        port = chrome.runtime.connect({ name: 'tldr' });
+      } catch (e) {
+        showOriginal();
+        showToast('扩展连接失败，请刷新页面重试');
+        return;
+      }
+      let settled = false;
+
+      port.onDisconnect.addListener(() => {
+        if (!settled) showOriginal();
       });
-      wrapper.appendChild(restoreBtn);
 
-      loadingSpan.replaceWith(wrapper);
-    });
+      port.onMessage.addListener((msg) => {
+        settled = true;
+        port.disconnect();
+        if (!document.contains(hostSpan)) return;
+        if (msg.error) {
+          showToast(
+            msg.error === 'no_api_key' ? '请先在插件中设置 API Key'
+            : msg.error === 'timeout'  ? '请求超时，请重试'
+            :                            '请求失败，请重试'
+          );
+          showOriginal();
+          return;
+        }
+        cachedResult = msg.result; // cache before rendering
+        showResult(cachedResult);
+      });
 
-    const lang = navigator.language || 'zh-CN';
-    port.postMessage({ text, mode, lang });
+      port.postMessage({ text, mode, lang });
+    }
+
+    runApi();
   }
 
   // ── 消息通信 ─────────────────────────────────────────
+  if (!alive()) return; // extension already invalidated before listener registration
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!alive()) return false; // context died between registrations
     switch (message.action) {
       case 'enable':           enable();                              sendResponse({ ok: true }); break;
       case 'disable':          disable();                             sendResponse({ ok: true }); break;
@@ -825,7 +854,7 @@
       case 'tldr-translate':   if (enabled) handleTldr('translate'); sendResponse({ ok: true }); break;
       case 'toggle-extension': {
         const next = !enabled;
-        chrome.storage.local.set({ focusReaderEnabled: next });
+        if (alive()) chrome.storage.local.set({ focusReaderEnabled: next });
         next ? enable() : disable();
         sendResponse({ ok: true });
         break;
@@ -838,6 +867,7 @@
   });
 
   // ── 初始化 ───────────────────────────────────────────
+  if (!alive()) return;
   chrome.storage.local.get(['focusReaderEnabled', 'focusReaderSettings', 'focusReaderAdaptive', 'focusReaderColumnMode'])
     .then((result) => {
       if (result.focusReaderSettings) settings = { ...settings, ...result.focusReaderSettings };

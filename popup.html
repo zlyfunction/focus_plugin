@@ -15,19 +15,8 @@
       width: 280px;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
       font-size: 13px;
-      color: #1c1c1e;
-      background: #f2f2f7;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      body { background: #1c1c1e; color: #f2f2f7; }
-      .card { background: #2c2c2e; }
-      .section-title { color: #98989d; }
-      .toggle-track { background: #3a3a3c; }
-      .option-btn { background: #3a3a3c; color: #f2f2f7; }
-      .option-btn:hover { background: #48484a; }
-      .option-btn.active { background: #0a84ff; color: #fff; }
-      .badge { background: #3a3a3c; color: #98989d; }
+      color: #f2f2f7;
+      background: #000;
     }
 
     .header {
@@ -41,11 +30,12 @@
       font-size: 15px;
       font-weight: 600;
       letter-spacing: -0.2px;
+      color: #fff;
     }
 
     .subtitle {
       font-size: 11px;
-      color: #8e8e93;
+      color: #98989d;
       margin-top: 1px;
     }
 
@@ -60,7 +50,7 @@
       position: relative;
       width: 44px;
       height: 26px;
-      background: #e5e5ea;
+      background: #3a3a3c;
       border-radius: 13px;
       cursor: pointer;
       transition: background 0.2s ease;
@@ -79,7 +69,7 @@
       height: 20px;
       background: #fff;
       border-radius: 50%;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.5);
       transition: transform 0.2s ease;
     }
 
@@ -89,7 +79,7 @@
 
     /* 卡片 */
     .card {
-      background: #fff;
+      background: #1c1c1e;
       border-radius: 12px;
       margin: 0 10px 10px;
       overflow: hidden;
@@ -103,31 +93,19 @@
     }
 
     .card-row + .card-row {
-      border-top: 0.5px solid #e5e5ea;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .card-row + .card-row { border-top-color: #3a3a3c; }
+      border-top: 0.5px solid #3a3a3c;
     }
 
     .row-label {
       font-size: 13px;
       font-weight: 500;
-      color: #1c1c1e;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .row-label { color: #f2f2f7; }
+      color: #f2f2f7;
     }
 
     .row-label-secondary {
       font-size: 12px;
       font-weight: 400;
-      color: #3c3c3e;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .row-label-secondary { color: #ebebf5; }
+      color: #ebebf5;
     }
 
     .section-title {
@@ -135,23 +113,15 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      color: #3c3c3e;
+      color: #98989d;
       padding: 6px 16px 4px;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .section-title { color: #ebebf5; }
     }
 
     .hint-text {
       font-size: 11px;
-      color: #3c3c3e;
+      color: #ebebf5;
       margin-top: 1px;
       min-height: 14px;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .hint-text { color: #ebebf5; }
     }
 
     /* 选项按钮组 */
@@ -166,24 +136,24 @@
       min-height: 32px;
       border-radius: 6px;
       border: none;
-      background: #e5e5ea;
-      color: #1c1c1e;
+      background: #2c2c2e;
+      color: #f2f2f7;
       cursor: pointer;
       transition: background 0.15s, color 0.15s;
       font-family: inherit;
     }
 
     .option-btn:focus-visible {
-      outline: 2px solid #007aff;
+      outline: 2px solid #0a84ff;
       outline-offset: 2px;
     }
 
     .option-btn:hover {
-      background: #d1d1d6;
+      background: #48484a;
     }
 
     .option-btn.active {
-      background: #007aff;
+      background: #0a84ff;
       color: #fff;
     }
 
@@ -207,12 +177,12 @@
     }
 
     .color-dot:focus-visible {
-      outline: 2px solid #007aff;
+      outline: 2px solid #0a84ff;
       outline-offset: 3px;
     }
 
     .color-dot.active {
-      border-color: #007aff;
+      border-color: #0a84ff;
     }
 
     .color-dot[data-color="yellow"]  { background: #ffd600; }
@@ -220,34 +190,29 @@
     .color-dot[data-color="blue"]    { background: #5ac8fa; }
     .color-dot[data-color="pink"]    { background: #ff6b9d; }
 
-    /* 兼容提示 */
+    /* 徽章 */
     .badge {
       font-size: 10px;
-      background: #e5e5ea;
-      color: #6c6c70;
+      background: #2c2c2e;
+      color: #ebebf5;
       padding: 2px 6px;
       border-radius: 4px;
     }
 
     .badge-learning {
-      background: #fff3e0;
-      color: #e65100;
+      background: #3a2a1a;
+      color: #ff9800;
     }
 
     .badge-calibrated {
-      background: #e8f5e9;
-      color: #2e7d32;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .badge-learning   { background: #3a2a1a; color: #ff9800; }
-      .badge-calibrated { background: #1a2e1a; color: #66bb6a; }
+      background: #1a2e1a;
+      color: #66bb6a;
     }
 
     .footer {
       padding: 6px 16px 12px;
       font-size: 11px;
-      color: #8e8e93;
+      color: #98989d;
       text-align: left;
     }
 
@@ -257,23 +222,15 @@
     }
 
     .ai-field + .ai-field {
-      border-top: 0.5px solid #c7c7cc;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .ai-field + .ai-field { border-top-color: #48484a; }
+      border-top: 0.5px solid #3a3a3c;
     }
 
     .ai-label {
       display: block;
       font-size: 12px;
       font-weight: 600;
-      color: #1c1c1e;
+      color: #f2f2f7;
       margin-bottom: 6px;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .ai-label { color: #f2f2f7; }
     }
 
     .ai-input {
@@ -281,9 +238,9 @@
       width: 100%;
       font-size: 13px;
       font-family: inherit;
-      color: #000;
-      background: #fff;
-      border: 2px solid #8e8e93;
+      color: #fff;
+      background: #2c2c2e;
+      border: 1.5px solid #48484a;
       border-radius: 8px;
       padding: 8px 10px;
       outline: none;
@@ -292,34 +249,27 @@
     }
 
     .ai-input:focus {
-      border-color: #007aff;
-      box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
+      border-color: #0a84ff;
+      box-shadow: 0 0 0 3px rgba(10,132,255,0.2);
     }
 
     .ai-input::placeholder {
-      color: #8e8e93;
+      color: #636366;
     }
 
-    @media (prefers-color-scheme: dark) {
-      .ai-input {
-        color: #fff;
-        background: #1c1c1e;
-        border-color: #636366;
-      }
-      .ai-input::placeholder { color: #636366; }
-      .ai-input:focus { border-color: #0a84ff; box-shadow: 0 0 0 3px rgba(10,132,255,0.2); }
+    .ai-hint {
+      font-size: 10px;
+      color: #636366;
+      margin-top: 4px;
+      word-break: break-all;
     }
 
     .ai-shortcuts {
       padding: 8px 14px 10px;
       font-size: 12px;
-      color: #3c3c3e;
-      border-top: 0.5px solid #c7c7cc;
+      color: #ebebf5;
+      border-top: 0.5px solid #3a3a3c;
       font-weight: 500;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .ai-shortcuts { border-top-color: #48484a; color: #ebebf5; }
     }
   </style>
 </head>
@@ -409,15 +359,16 @@
     <div class="card">
       <div class="ai-field">
         <label class="ai-label" for="apiKeyInput">API Key</label>
-        <input type="password" id="apiKeyInput" class="ai-input" placeholder="sk-…" autocomplete="off" />
+        <input type="password" id="apiKeyInput" class="ai-input" placeholder="sk-… 或 Gemini API Key" autocomplete="off" />
       </div>
       <div class="ai-field">
         <label class="ai-label" for="apiEndpointInput">接口地址</label>
         <input type="text" id="apiEndpointInput" class="ai-input" placeholder="https://free.v36.cm/v1/chat/completions" autocomplete="off" />
+        <div class="ai-hint">Gemini: https://generativelanguage.googleapis.com/v1beta/models</div>
       </div>
       <div class="ai-field">
         <label class="ai-label" for="apiModelInput">模型</label>
-        <input type="text" id="apiModelInput" class="ai-input" placeholder="gpt-4o-mini" autocomplete="off" />
+        <input type="text" id="apiModelInput" class="ai-input" placeholder="gpt-4o-mini 或 gemini-2.5-flash" autocomplete="off" />
       </div>
       <div class="ai-shortcuts">摘要 Alt+T &nbsp;·&nbsp; 翻译 Alt+Shift+T</div>
     </div>

@@ -600,13 +600,21 @@
     wrapper.style.cssText = 'max-width:65ch;margin:0 auto;box-sizing:border-box;';
 
     // Wrap target: insert wrapper before target, move target inside
+    // BUG-004: guard against detached node (no parentNode)
+    if (!target.parentNode) {
+      showToast('页面结构无法识别，无法启用列模式');
+      return;
+    }
     target.parentNode.insertBefore(wrapper, target);
     wrapper.appendChild(target);
     window.__frColumnWrapper = wrapper; // F004: store wrapper ref for safe teardown
 
     // Dim siblings (HTMLElement only, not the wrapper itself)
+    // BUG-006: skip elements that are already effectively invisible (CSS opacity:0)
     Array.from(wrapper.parentNode.children).forEach(el => {
       if (el === wrapper || !(el instanceof HTMLElement)) return;
+      const effectiveOpacity = parseFloat(getComputedStyle(el).opacity);
+      if (effectiveOpacity < 0.05) return; // already invisible — don't touch
       el.dataset.frDimOrig = el.style.opacity || '';
       el.style.opacity = '0.15';
       el.style.pointerEvents = 'none';
@@ -656,6 +664,8 @@
     window.__frColumnTarget  = null;
     window.__frColumnWrapper = null;
     window.__frColumnState   = false;
+    // BUG-003: clear storage so SPA-triggered teardown doesn't re-enable on next page load
+    chrome.storage.local.set({ focusReaderColumnMode: false });
   }
 
   function setColumnMode(on) {
@@ -710,6 +720,11 @@
 
     const text = range.toString().trim();
     if (!text) return;
+    // BUG-008: cap text length to prevent runaway API billing and context overflow
+    if (text.length > 2000) {
+      showToast('请选择较短的文字（2000字以内）');
+      return;
+    }
 
     // Snapshot original content BEFORE any DOM mutation
     originalFragment = guardFragment; // reuse the already-cloned fragment

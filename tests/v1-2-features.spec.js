@@ -238,17 +238,18 @@ test.describe('column mode', () => {
 test.describe('TL;DR and translate (static checks)', () => {
   test('handleTldr uses textContent not innerHTML (XSS prevention)', () => {
     const src = fs.readFileSync(path.join(EXT_PATH, 'content.js'), 'utf8');
-    // XSS guard: result must use textContent
-    expect(src).toContain('resultSpan.textContent = msg.result');
+    // XSS guard: result must use textContent (may reference resultText local var)
+    expect(src).toMatch(/resultSpan\.textContent\s*=/);
     // Must NOT use innerHTML for result
     expect(src).not.toMatch(/resultSpan\.innerHTML\s*=/);
   });
 
-  test('handleTldr removes restore button before re-inserting fragment', () => {
+  test('handleTldr restores original fragment on [原文] click', () => {
     const src = fs.readFileSync(path.join(EXT_PATH, 'content.js'), 'utf8');
-    // Double-invocation guard
-    expect(src).toContain('restoreBtn.remove()');
+    // New hostSpan architecture: showOriginal() replaces innerHTML with originalFragment clone
     expect(src).toContain("originalFragment.cloneNode(true)");
+    // hostSpan.innerHTML cleared before inserting original
+    expect(src).toContain('hostSpan.innerHTML = \'\'');
   });
 
   test('cross-block selection guard uses querySelectorAll', () => {
@@ -263,8 +264,8 @@ test.describe('TL;DR and translate (static checks)', () => {
 
   test('originalFragment captured BEFORE deleteContents (snapshot timing)', () => {
     const src = fs.readFileSync(path.join(EXT_PATH, 'content.js'), 'utf8');
-    // guardFragment (reused as originalFragment) captured via cloneContents before deleteContents
-    const fragIdx = src.indexOf('guardFragment = range.cloneContents()');
+    // originalFragment captured via cloneContents before deleteContents
+    const fragIdx = src.indexOf('originalFragment = range.cloneContents()');
     const delIdx  = src.indexOf('range.deleteContents()');
     expect(fragIdx).toBeGreaterThan(-1);
     expect(delIdx).toBeGreaterThan(-1);

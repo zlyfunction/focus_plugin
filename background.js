@@ -44,11 +44,14 @@ chrome.runtime.onConnect.addListener((port) => {
     // F002: validate lang against BCP-47 to prevent prompt injection via lang field
     if (!/^[a-zA-Z]{2,8}(-[a-zA-Z0-9]{2,8})*$/.test(lang)) lang = 'zh-CN';
 
-    const { focusReaderApiKey } = await chrome.storage.local.get(['focusReaderApiKey']);
+    const stored = await chrome.storage.local.get(['focusReaderApiKey', 'focusReaderApiEndpoint', 'focusReaderApiModel']);
+    const focusReaderApiKey = stored.focusReaderApiKey;
     if (!focusReaderApiKey) {
       if (!aborted) port.postMessage({ error: 'no_api_key' });
       return;
     }
+    const apiEndpoint = stored.focusReaderApiEndpoint || 'https://free.v36.cm/v1/chat/completions';
+    const apiModel    = stored.focusReaderApiModel    || 'gpt-4o-mini';
 
     const prompt = buildPrompt(text, mode, lang);
 
@@ -59,7 +62,7 @@ chrome.runtime.onConnect.addListener((port) => {
 
     let result;
     try {
-      const response = await fetch('https://free.v36.cm/v1/chat/completions', {
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         signal: controller.signal,
         headers: {
@@ -67,7 +70,7 @@ chrome.runtime.onConnect.addListener((port) => {
           'Authorization': `Bearer ${focusReaderApiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: apiModel,
           max_tokens: 512,
           messages: [{ role: 'user', content: prompt }],
         }),

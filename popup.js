@@ -17,9 +17,15 @@ let currentState = {
 // ── 从当前 Tab 读取状态 ───────────────────────────────
 async function loadState() {
   // Load API key and profiles from storage (independent of tab)
-  const stored = await chrome.storage.local.get(['focusReaderApiKey', 'focusReaderProfiles', 'focusReaderAdaptive', 'focusReaderColumnMode']);
+  const stored = await chrome.storage.local.get(['focusReaderApiKey', 'focusReaderApiEndpoint', 'focusReaderApiModel', 'focusReaderProfiles', 'focusReaderAdaptive', 'focusReaderColumnMode']);
   if (stored.focusReaderApiKey) {
     document.getElementById('apiKeyInput').value = stored.focusReaderApiKey;
+  }
+  if (stored.focusReaderApiEndpoint) {
+    document.getElementById('apiEndpointInput').value = stored.focusReaderApiEndpoint;
+  }
+  if (stored.focusReaderApiModel) {
+    document.getElementById('apiModelInput').value = stored.focusReaderApiModel;
   }
   if (stored.focusReaderAdaptive === false) currentState.adaptiveMode = false;
   if (stored.focusReaderColumnMode === true) currentState.columnMode = true;
@@ -255,23 +261,30 @@ document.getElementById('columnToggle').addEventListener('click', async () => {
   renderUI();
 });
 
-// API Key 输入（blur 时保存，也在 input 时 debounce 保存 — F015: popup 关闭不一定触发 blur）
-let _apiKeySaveTimer = null;
-function saveApiKey(value) {
-  const key = value.trim();
-  chrome.storage.local.set({ focusReaderApiKey: key });
+// AI 设置输入（blur 时保存，debounce input 保存 — F015: popup 关闭不一定触发 blur）
+function makeDebounced(storageKey, trim = true) {
+  let timer = null;
+  function save(value) {
+    const v = trim ? value.trim() : value;
+    chrome.storage.local.set({ [storageKey]: v });
+  }
+  return (el) => {
+    el.addEventListener('blur', (e) => {
+      clearTimeout(timer);
+      const v = trim ? e.target.value.trim() : e.target.value;
+      e.target.value = v;
+      save(v);
+    });
+    el.addEventListener('input', (e) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => save(e.target.value), 800);
+    });
+  };
 }
-const apiKeyInput = document.getElementById('apiKeyInput');
-apiKeyInput.addEventListener('blur', (e) => {
-  clearTimeout(_apiKeySaveTimer);
-  const key = e.target.value.trim();
-  e.target.value = key;
-  saveApiKey(key);
-});
-apiKeyInput.addEventListener('input', (e) => {
-  clearTimeout(_apiKeySaveTimer);
-  _apiKeySaveTimer = setTimeout(() => saveApiKey(e.target.value), 800);
-});
+
+makeDebounced('focusReaderApiKey')(document.getElementById('apiKeyInput'));
+makeDebounced('focusReaderApiEndpoint')(document.getElementById('apiEndpointInput'));
+makeDebounced('focusReaderApiModel')(document.getElementById('apiModelInput'));
 
 // ── 初始化 ────────────────────────────────────────────
 loadState();

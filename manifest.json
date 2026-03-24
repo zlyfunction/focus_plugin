@@ -5,7 +5,7 @@
   "description": "阅读辅助插件：跟踪鼠标位置，高亮附近文字，减少视觉干扰",
 
   "permissions": ["storage", "activeTab"],
-  "host_permissions": ["<all_urls>", "https://free.v36.cm/*"],
+  "host_permissions": ["<all_urls>"],
 
   "commands": {
     "tldr-summarize": {

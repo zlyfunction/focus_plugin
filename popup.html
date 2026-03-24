@@ -220,6 +220,77 @@
       color: #8e8e93;
       text-align: left;
     }
+
+    /* AI 设置区域 */
+    .ai-field {
+      padding: 10px 14px 8px;
+    }
+
+    .ai-field + .ai-field {
+      border-top: 0.5px solid #e5e5ea;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .ai-field + .ai-field { border-top-color: #3a3a3c; }
+    }
+
+    .ai-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: #6c6c70;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .ai-label { color: #98989d; }
+    }
+
+    .ai-input {
+      display: block;
+      width: 100%;
+      font-size: 13px;
+      font-family: inherit;
+      color: #1c1c1e;
+      background: #f2f2f7;
+      border: 1.5px solid #d1d1d6;
+      border-radius: 7px;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color 0.15s;
+      box-sizing: border-box;
+    }
+
+    .ai-input:focus {
+      border-color: #007aff;
+    }
+
+    .ai-input::placeholder {
+      color: #aeaeb2;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .ai-input {
+        color: #f2f2f7;
+        background: #3a3a3c;
+        border-color: #48484a;
+      }
+      .ai-input::placeholder { color: #6c6c70; }
+      .ai-input:focus { border-color: #0a84ff; }
+    }
+
+    .ai-shortcuts {
+      padding: 8px 14px 10px;
+      font-size: 11px;
+      color: #8e8e93;
+      border-top: 0.5px solid #e5e5ea;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .ai-shortcuts { border-top-color: #3a3a3c; color: #6c6c70; }
+    }
   </style>
 </head>
 <body>
@@ -304,17 +375,21 @@
       <div class="card" id="profilesCard"></div>
     </div>
 
-    <div class="section-title">AI 功能</div>
+    <div class="section-title">AI 设置</div>
     <div class="card">
-      <div class="card-row">
-        <span class="row-label">AI API Key</span>
-        <input type="password" id="apiKeyInput" placeholder="sk-…"
-          style="font-size:11px;border:none;background:transparent;color:inherit;
-                 text-align:right;width:120px;outline:none;font-family:inherit;" />
+      <div class="ai-field">
+        <label class="ai-label" for="apiKeyInput">API Key</label>
+        <input type="password" id="apiKeyInput" class="ai-input" placeholder="sk-…" autocomplete="off" />
       </div>
-      <div class="card-row">
-        <span class="row-label" style="color:#8e8e93;font-size:11px">摘要 Alt+T &nbsp;·&nbsp; 翻译 Alt+Shift+T</span>
+      <div class="ai-field">
+        <label class="ai-label" for="apiEndpointInput">接口地址</label>
+        <input type="text" id="apiEndpointInput" class="ai-input" placeholder="https://free.v36.cm/v1/chat/completions" autocomplete="off" />
       </div>
+      <div class="ai-field">
+        <label class="ai-label" for="apiModelInput">模型</label>
+        <input type="text" id="apiModelInput" class="ai-input" placeholder="gpt-4o-mini" autocomplete="off" />
+      </div>
+      <div class="ai-shortcuts">摘要 Alt+T &nbsp;·&nbsp; 翻译 Alt+Shift+T</div>
     </div>
 
     <div class="footer" id="compatNote"></div>

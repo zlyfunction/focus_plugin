@@ -312,7 +312,8 @@ test.describe('Alt+F extension toggle', () => {
 test.describe('API key security', () => {
   test('background.js reads API key from storage (never from port message)', () => {
     const src = fs.readFileSync(path.join(EXT_PATH, 'background.js'), 'utf8');
-    expect(src).toContain("chrome.storage.local.get(['focusReaderApiKey']");
+    expect(src).toContain("'focusReaderApiKey'");
+    expect(src).toContain("chrome.storage.local.get(");
     // Port message destructure must not include apiKey (let destructure after F002 lang validation)
     expect(src).toContain('let { text, mode, lang } = msg');
     expect(src).not.toContain('msg.apiKey');
@@ -325,8 +326,9 @@ test.describe('API key security', () => {
     expect(src).toContain('controller.abort()');
   });
 
-  test('manifest has host_permission for AI API endpoint', () => {
+  test('manifest has broad host_permission for user-configurable API endpoint', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(EXT_PATH, 'manifest.json'), 'utf8'));
-    expect(manifest.host_permissions).toContain('https://free.v36.cm/*');
+    // <all_urls> covers any user-configured endpoint URL
+    expect(manifest.host_permissions).toContain('<all_urls>');
   });
 });

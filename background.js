@@ -25,7 +25,15 @@ chrome.commands.onCommand.addListener(async (command) => {
   chrome.tabs.sendMessage(tab.id, { action: command }).catch(() => {});
 });
 
-// ── OpenAI-compatible API proxy (port-based, keeps service worker alive) ──
+// ── API proxy (port-based, keeps service worker alive) ────────────
+//
+// Supports two providers detected by endpoint URL:
+//   • Gemini  — endpoint contains "googleapis.com"
+//               URL:  {endpoint}/{model}:generateContent
+//               Auth: X-goog-api-key header
+//   • OpenAI-compatible (default)
+//               URL:  endpoint as-is
+//               Auth: Authorization: Bearer header
 //
 // Security: API key is read here in background.js directly from storage.
 // Content script only sends { text, mode, lang } — never the key itself.
@@ -54,26 +62,46 @@ chrome.runtime.onConnect.addListener((port) => {
     const apiModel    = stored.focusReaderApiModel    || 'gpt-4o-mini';
 
     const prompt = buildPrompt(text, mode, lang);
+    const isGemini = apiEndpoint.includes('googleapis.com');
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
-    // Also abort if port disconnects mid-fetch
     port.onDisconnect.addListener(() => controller.abort());
 
     let result;
     try {
-      const response = await fetch(apiEndpoint, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
+      let fetchUrl, fetchHeaders, fetchBody;
+
+      if (isGemini) {
+        // Gemini API: POST {base}/{model}:generateContent?key=...
+        const base = apiEndpoint.replace(/\/$/, '');
+        fetchUrl = `${base}/${apiModel}:generateContent`;
+        fetchHeaders = {
+          'Content-Type': 'application/json',
+          'X-goog-api-key': focusReaderApiKey,
+        };
+        fetchBody = JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        });
+      } else {
+        // OpenAI-compatible
+        fetchUrl = apiEndpoint;
+        fetchHeaders = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${focusReaderApiKey}`,
-        },
-        body: JSON.stringify({
+        };
+        fetchBody = JSON.stringify({
           model: apiModel,
           max_tokens: 512,
           messages: [{ role: 'user', content: prompt }],
-        }),
+        });
+      }
+
+      const response = await fetch(fetchUrl, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: fetchHeaders,
+        body: fetchBody,
       });
       clearTimeout(timeout);
 
@@ -83,7 +111,11 @@ chrome.runtime.onConnect.addListener((port) => {
       }
 
       const data = await response.json();
-      result = data.choices?.[0]?.message?.content?.trim() || '';
+      if (isGemini) {
+        result = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      } else {
+        result = data.choices?.[0]?.message?.content?.trim() || '';
+      }
     } catch (e) {
       clearTimeout(timeout);
       if (!aborted) {
@@ -99,9 +131,10 @@ chrome.runtime.onConnect.addListener((port) => {
 // ── Prompt builder ────────────────────────────────────────────────
 function buildPrompt(text, mode, lang) {
   if (mode === 'summarize') {
-    return `请用简洁的1-2句话总结以下文字，使用${lang}语言输出，不要加任何前缀或解释：\n\n${text}`;
+    // Respond in the same language as the input text, not the browser UI language
+    return `请用简洁的1-2句话总结以下文字，必须使用与原文完全相同的语言输出，不要加任何前缀或解释：\n\n${text}`;
   }
-  // translate
+  // translate: go to the opposite language
   const targetLang = lang.startsWith('zh') ? 'English' : '中文';
   return `请将以下文字翻译为${targetLang}，只输出译文，不要加任何前缀或解释：\n\n${text}`;
 }

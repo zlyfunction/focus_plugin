@@ -2,6 +2,22 @@
 
 All notable changes to Focus Reader will be documented here.
 
+## [1.3] - 2026-03-24
+
+### Added
+- **Gemini API support**: auto-detects `googleapis.com` endpoints and switches to Gemini request/response format (`X-goog-api-key` header, `generateContent` URL, `candidates[0].content.parts[0].text` response); tested with `gemini-2.5-flash`
+- **TL;DR result cache**: result text is cached on first API call; clicking `[原文]` → `[摘要]`/`[译文]` toggles between original and result without re-calling the API
+
+### Changed
+- **TL;DR architecture**: replaced single-use `loadingSpan → wrapper` DOM swap with a persistent `hostSpan` that stays in the DOM across all state transitions (loading → result → original → result)
+- **Popup dark theme**: hardcoded black background / white text throughout; removed all `@media (prefers-color-scheme: dark)` blocks that caused display errors in Chrome dark theme mode
+- **Summarize prompt**: now instructs the model to respond in the same language as the input text (`与原文相同的语言`), not the browser UI language
+- **Popup placeholder**: updated Gemini endpoint hint and model placeholder to `gemini-2.5-flash`
+
+### Fixed
+- **Extension context invalidated**: added `alive()` guard to all `chrome.*` calls in content.js; `_tick()` interval self-stops when context is invalidated after extension reload; message listener registration guarded at top level
+- **Back/forward cache port closure**: gracefully handled by existing `onDisconnect` → `showOriginal()` flow
+
 ## [1.2] - 2026-03-23
 
 ### Added

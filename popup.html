@@ -112,16 +112,46 @@
 
     .row-label {
       font-size: 13px;
-      color: inherit;
+      font-weight: 500;
+      color: #1c1c1e;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .row-label { color: #f2f2f7; }
+    }
+
+    .row-label-secondary {
+      font-size: 12px;
+      font-weight: 400;
+      color: #3c3c3e;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .row-label-secondary { color: #ebebf5; }
     }
 
     .section-title {
       font-size: 11px;
-      font-weight: 500;
+      font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      color: #6c6c70;
+      color: #3c3c3e;
       padding: 6px 16px 4px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .section-title { color: #ebebf5; }
+    }
+
+    .hint-text {
+      font-size: 11px;
+      color: #3c3c3e;
+      margin-top: 1px;
+      min-height: 14px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .hint-text { color: #ebebf5; }
     }
 
     /* 选项按钮组 */
@@ -362,8 +392,8 @@
         </div>
         <div class="card-row" id="adaptiveStatusRow">
           <div>
-            <span class="row-label" style="color: #8e8e93">校准状态</span>
-            <div id="adaptiveHint" style="font-size:10px;color:#aeaeb2;margin-top:1px;min-height:14px"></div>
+            <span class="row-label-secondary">校准状态</span>
+            <div id="adaptiveHint" class="hint-text"></div>
           </div>
           <span class="badge" id="adaptiveStatus" title="">—</span>
         </div>
